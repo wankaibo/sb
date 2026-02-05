@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # mcdev_final.sh (最终修复版)
 # Minecraft Mod 全流程构建流水线 (Termux/Linux 兼容)
-# 修复点：解决条件判断简写导致的 "conditional binary operator expected" 语法错误
+# 修复点：解决所有输入变量为空导致的 "conditional binary operator expected" 语法错误
 # Usage: chmod +x mcdev_final.sh && ./mcdev_final.sh
 
 set -euo pipefail
@@ -846,8 +846,13 @@ batch_zkm_deobf(){
   
   # 输入目录
   read -p "输入包含 Jar 文件的目录: " jar_dir
-  if [[ -z "$jar_dir" || ! -d "$jar_dir" ]]; then
-    err "目录不存在: $jar_dir"
+  # 修复：先校验非空
+  if [[ -z "$jar_dir" ]]; then
+    err "目录路径不能为空"
+    return 1
+  fi
+  if [[ ! -d "$jar_dir" ]]; then
+    err "无效的目录: $jar_dir"
     return 1
   fi
   
@@ -874,6 +879,8 @@ batch_zkm_deobf(){
       else
         err "ZKM 处理失败: $(basename "$jar")"
       fi
+    else
+      warn "跳过无效文件: $jar"
     fi
   done
   
@@ -881,7 +888,7 @@ batch_zkm_deobf(){
 }
 
 # -------------------------
-# 核心构建菜单 (build_menu) - 修复语法错误
+# 核心构建菜单 (build_menu) - 最终修复版
 # -------------------------
 build_menu(){
   local dir="$1"
@@ -1006,12 +1013,17 @@ build_menu(){
         fi
         ;;
 
-      7) # ZKM反混淆（单文件）
+      7) # ZKM反混淆（单文件）- 修复：非空+存在性双重校验
         local jar=$(find_final_jar "$dir" "$mod_type")
         if [[ -n "$jar" && -f "$jar" ]]; then
           zkm_deobf_single "$jar"
         else
           read -p "未自动找到JAR，请输入JAR文件路径: " custom_jar
+          # 新增：非空校验
+          if [[ -z "$custom_jar" ]]; then
+            err "JAR路径不能为空"
+            continue
+          fi
           if [[ -f "$custom_jar" ]]; then
             zkm_deobf_single "$custom_jar"
           else
@@ -1020,8 +1032,13 @@ build_menu(){
         fi
         ;;
 
-      8) # 批量ZKM反混淆
+      8) # 批量ZKM反混淆 - 修复：非空+目录存在性双重校验
         read -p "输入包含JAR的目录路径: " jar_dir
+        # 新增：非空校验
+        if [[ -z "$jar_dir" ]]; then
+          err "目录路径不能为空"
+          continue
+        fi
         if [[ -d "$jar_dir" ]]; then
           local jar_list=($(find "$jar_dir" -type f -iname "*.jar" ! -iname "*sources*" ! -iname "*dev*"))
           if [[ ${#jar_list[@]} -eq 0 ]]; then
@@ -1030,9 +1047,14 @@ build_menu(){
           fi
           info "找到 ${#jar_list[@]} 个JAR文件，开始批量反混淆..."
           for jar in "${jar_list[@]}"; do
-            info "处理: $jar"
-            zkm_deobf_single "$jar"
-            sleep 1
+            # 新增：文件存在性校验
+            if [[ -f "$jar" ]]; then
+              info "处理: $jar"
+              zkm_deobf_single "$jar"
+              sleep 1
+            else
+              warn "跳过无效文件: $jar"
+            fi
           done
           ok "批量ZKM反混淆完成"
         else
@@ -1040,7 +1062,7 @@ build_menu(){
         fi
         ;;
 
-      9) # 诊断构建失败
+      9) # 诊断构建失败 - 修复：非空+文件存在性双重校验
         if [[ -f "$build_log" ]]; then
           diagnose_build_failure "$build_log"
         else
@@ -1048,6 +1070,11 @@ build_menu(){
           read -p "是否指定其他日志文件？(y/N): " log_path
           if [[ "$log_path" =~ ^[Yy]$ ]]; then
             read -p "输入日志路径: " custom_log
+            # 新增：非空校验
+            if [[ -z "$custom_log" ]]; then
+              err "日志路径不能为空"
+              continue
+            fi
             if [[ -f "$custom_log" ]]; then
               diagnose_build_failure "$custom_log"
             else
@@ -1136,6 +1163,11 @@ main_menu(){
         ;;
       7)
         read -p "输入 Jar 文件路径: " jar_path
+        # 新增：非空校验
+        if [[ -z "$jar_path" ]]; then
+          err "JAR路径不能为空"
+          continue
+        fi
         zkm_deobf_single "$jar_path"
         ;;
       8)

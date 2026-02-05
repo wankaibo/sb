@@ -1,14 +1,8 @@
 #!/usr/bin/env bash
-# mcdev_final.sh (完整版)
-# Ultimate single-file Minecraft Mod pipeline (Termux-friendly)
-#  - 全功能整合：JDK自动安装、Gradle配置、Mod构建/混淆/反混淆、发布等
-#  - 兼容Termux/ Linux (Debian/Ubuntu/CentOS)
-#
-# Usage:
-#   chmod +x mcdev_final.sh
-#   ./mcdev_final.sh
-#
-# IMPORTANT: 仅用于合法/合规的Minecraft Mod开发场景
+# mcdev_final.sh (最终修复版)
+# Minecraft Mod 全流程构建流水线 (Termux/Linux 兼容)
+# 修复点：解决条件判断简写导致的 "conditional binary operator expected" 语法错误
+# Usage: chmod +x mcdev_final.sh && ./mcdev_final.sh
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -136,7 +130,9 @@ auto_install_jdk(){
   if command -v java >/dev/null 2>&1; then
     info "检测到 Java: $(java -version 2>&1 | head -n1)"
     read -p "保留现有 Java？(y/N): " keep
-    [[ "$keep" =~ ^[Yy]$ ]] && return 0
+    if [[ "$keep" =~ ^[Yy]$ ]]; then
+      return 0
+    fi
   fi
 
   echo "请选择 JDK 版本：1)8  2)17(推荐)  3)21  4) 自定义 URL/本地包  5) 取消"
@@ -173,7 +169,9 @@ auto_install_jdk(){
     
     # 兼容 bash/zsh rc文件
     shell_rc="$HOME/.bashrc"
-    [[ -n "${ZSH_VERSION:-}" ]] && shell_rc="$HOME/.zshrc"
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+      shell_rc="$HOME/.zshrc"
+    fi
     
     # 避免重复写入环境变量
     if ! grep -q "# mcdev jdk $ver" "$shell_rc" 2>/dev/null; then
@@ -197,18 +195,27 @@ auto_install_jdk(){
 
 install_custom_jdk(){
   local src="$1"
-  if [[ -z "$src" ]]; then err "未提供 URL/路径"; return 1; fi
+  if [[ -z "$src" ]]; then
+    err "未提供 URL/路径"
+    return 1
+  fi
   
   # 下载远程JDK包
   if [[ "$src" =~ ^https?:// ]]; then
     tmp="/tmp/custom_jdk_$(date +%s).tar.gz"
     info "下载自定义 JDK..."
-    if ! wget -O "$tmp" "$src"; then err "下载失败"; return 1; fi
+    if ! wget -O "$tmp" "$src"; then
+      err "下载失败"
+      return 1
+    fi
     src="$tmp"
   fi
   
   # 检查文件存在性
-  if [[ ! -f "$src" ]]; then err "文件不存在: $src"; return 1; fi
+  if [[ ! -f "$src" ]]; then
+    err "文件不存在: $src"
+    return 1
+  fi
   
   dest="$HOME/jdk-custom-$(date +%s)"
   ensure_dir "$dest"
@@ -223,7 +230,9 @@ install_custom_jdk(){
   
   # 写入环境变量
   shell_rc="$HOME/.bashrc"
-  [[ -n "${ZSH_VERSION:-}" ]] && shell_rc="$HOME/.zshrc"
+  if [[ -n "${ZSH_VERSION:-}" ]]; then
+    shell_rc="$HOME/.zshrc"
+  fi
   
   if ! grep -q "# mcdev custom jdk" "$shell_rc" 2>/dev/null; then
     {
@@ -243,7 +252,10 @@ install_custom_jdk(){
 # ProGuard 自动下载
 # -------------------------
 ensure_proguard(){
-  if [[ -f "$PROGUARD_JAR" ]]; then ok "ProGuard 就绪"; return 0; fi
+  if [[ -f "$PROGUARD_JAR" ]]; then
+    ok "ProGuard 就绪"
+    return 0
+  fi
   info "正在下载 ProGuard..."
   ensure_dir "$PROGUARD_DIR"
   
@@ -270,7 +282,10 @@ ensure_proguard(){
 # ZKM (ZelixKiller) 自动下载
 # -------------------------
 ensure_zkm(){
-  if [[ -f "$ZKM_JAR" ]]; then ok "ZKM 就绪"; return 0; fi
+  if [[ -f "$ZKM_JAR" ]]; then
+    ok "ZKM 就绪"
+    return 0
+  fi
   ensure_dir "$ZKM_DIR"
   
   ZKM_URL_DEFAULT="https://raw.githubusercontent.com/fkbmr/sb/main/zkm.jar"
@@ -291,7 +306,10 @@ ensure_zkm(){
 # CFR 反编译器 自动下载
 # -------------------------
 ensure_cfr(){
-  if [[ -f "$CFR_JAR" ]]; then ok "CFR 就绪"; return 0; fi
+  if [[ -f "$CFR_JAR" ]]; then
+    ok "CFR 已下载"
+    return 0
+  fi
   ensure_dir "$CFR_DIR"
   
   CFR_URL="https://www.benf.org/other/cfr/cfr-0.152.jar"
@@ -334,23 +352,34 @@ ensure_gradle_wrapper(){
 
 install_gradle_from_zip(){
   read -p "请输入 Gradle ZIP 本地路径或下载 URL: " zippath
-  [[ -z "$zippath" ]] && { warn "取消"; return 1; }
+  if [[ -z "$zippath" ]]; then
+    warn "取消"
+    return 1
+  fi
   zippath="${zippath/#\~/$HOME}"
   
   # 下载远程ZIP
   if [[ "$zippath" =~ ^https?:// ]]; then
     tmp="/tmp/gradle_$(date +%s).zip"
     info "下载 Gradle ZIP..."
-    wget -O "$tmp" "$zippath" || { err "下载失败"; return 1; }
+    if ! wget -O "$tmp" "$zippath"; then
+      err "下载失败"
+      return 1
+    fi
     zippath="$tmp"
   fi
   
   # 检查文件存在性
-  if [[ ! -f "$zippath" ]]; then err "文件不存在: $zippath"; return 1; fi
+  if [[ ! -f "$zippath" ]]; then
+    err "文件不存在: $zippath"
+    return 1
+  fi
   
   # 确定安装目录
   dest="/opt/gradle"
-  [[ ! -w /opt ]] && dest="$HOME/.local/gradle"
+  if [[ ! -w /opt ]]; then
+    dest="$HOME/.local/gradle"
+  fi
   ensure_dir "$dest"
   
   # 解压
@@ -358,7 +387,9 @@ install_gradle_from_zip(){
   
   # 定位Gradle目录
   folder=$(ls "$dest" | grep -E "^gradle-[0-9.]+" | head -n1)
-  [[ -z "$folder" ]] && folder=$(ls "$dest" | head -n1)
+  if [[ -z "$folder" ]]; then
+    folder=$(ls "$dest" | head -n1)
+  fi
   
   # 创建软链接
   if [[ -x "$dest/$folder/bin/gradle" ]]; then
@@ -377,11 +408,15 @@ install_gradle_from_zip(){
 # Maven 检查 & 安装
 # -------------------------
 ensure_maven(){
-  if command -v mvn >/dev/null 2>&1; then ok "Maven 已安装"; return 0; fi
+  if command -v mvn >/dev/null 2>&1; then
+    ok "Maven 已安装"
+    return 0
+  fi
   if [[ -n "$PKG_INSTALL_CMD" ]]; then
     info "尝试安装 Maven..."
     $PKG_INSTALL_CMD maven || { warn "自动安装 Maven 失败，请手动安装"; return 1; }
-    ok "Maven 安装完成"; return 0
+    ok "Maven 安装完成"
+    return 0
   fi
   warn "无法自动安装 Maven，请手动安装"
   return 1
@@ -401,7 +436,9 @@ configure_gradle_optimization(){
     mem_mb=$((mem_kb/1024))
   fi
   xmx=$((mem_mb*70/100))
-  (( xmx > 4096 )) && xmx=4096
+  if (( xmx > 4096 )); then
+    xmx=4096
+  fi
   
   # 写入JVM参数
   if [[ -f "$PROPS" ]]; then
@@ -430,7 +467,10 @@ EOF
 # -------------------------
 clone_repo(){
   read -p "仓库 (user/repo 或 完整 URL): " repo_input
-  [[ -z "$repo_input" ]] && { warn "取消"; return 1; }
+  if [[ -z "$repo_input" ]]; then
+    warn "取消"
+    return 1
+  fi
   
   # 构建克隆URL
   if [[ "$repo_input" =~ ^https?:// ]]; then 
@@ -454,7 +494,9 @@ clone_repo(){
   load_config
   echo "选择存放位置 (默认: $PROJECT_BASE):"
   echo "1) 本地: $PROJECTS_LOCAL"
-  [[ "$IS_TERMUX" == "true" ]] && echo "2) 共享: $PROJECTS_SDCARD"
+  if [[ "$IS_TERMUX" == "true" ]]; then 
+    echo "2) 共享: $PROJECTS_SDCARD"
+  fi
   echo "3) 自定义路径"
   read -p "选择 [Enter=默认]: " choice
   
@@ -471,11 +513,17 @@ clone_repo(){
   repo_name=$(basename "$repo_input" .git)
   info "克隆到: $target/$repo_name"
   
-  git clone "$repo_url" "$target/$repo_name" || { err "git clone 失败"; return 1; }
+  if ! git clone "$repo_url" "$target/$repo_name"; then
+    err "git clone 失败"
+    return 1
+  fi
   ok "克隆完成"
   
   # 进入目录 & 生成gradlew
-  cd "$target/$repo_name" || { err "进入目录失败"; return 1; }
+  if ! cd "$target/$repo_name"; then
+    err "进入目录失败"
+    return 1
+  fi
   ok "已进入 $(pwd)"
   ensure_gradle_wrapper || true
   
@@ -561,11 +609,17 @@ find_final_jar(){
   # 按模组类型查找产物
   if [[ "$type" == "fabric" || "$type" == "quilt" ]]; then
     res=$(find "$dir/build" -type f \( -iname "*remapped*.jar" -o -iname "*mapped*.jar" \) 2>/dev/null | head -n1)
-    [[ -z "$res" ]] && res=$(find "$dir/build" -type f -iname "*.jar" ! -iname "*dev*" ! -iname "*sources*" 2>/dev/null | head -n1)
+    if [[ -z "$res" ]]; then
+      res=$(find "$dir/build" -type f -iname "*.jar" ! -iname "*dev*" ! -iname "*sources*" 2>/dev/null | head -n1)
+    fi
   elif [[ "$type" == "forge" ]]; then
     res=$(find "$dir/build" -type f -iname "*reobf*.jar" 2>/dev/null | head -n1)
-    [[ -z "$res" ]] && res=$(find "$dir/build" -type f -iname "*jarjar*.jar" 2>/dev/null | head -n1)
-    [[ -z "$res" ]] && res=$(find "$dir/build" -type f -iname "*.jar" ! -iname "*sources*" 2>/dev/null | head -n1)
+    if [[ -z "$res" ]]; then
+      res=$(find "$dir/build" -type f -iname "*jarjar*.jar" 2>/dev/null | head -n1)
+    fi
+    if [[ -z "$res" ]]; then
+      res=$(find "$dir/build" -type f -iname "*.jar" ! -iname "*sources*" 2>/dev/null | head -n1)
+    fi
   else
     res=$(find "$dir/build" -type f -iname "*.jar" ! -iname "*sources*" ! -iname "*dev*" 2>/dev/null | head -n1)
   fi
@@ -588,8 +642,11 @@ publish_release(){
   # 复制到SD卡（Termux）
   if [[ -d "/sdcard" || -d "$HOME/storage/shared" ]]; then
     ensure_dir "$SDCARD_DOWNLOAD" 2>/dev/null || true
-    cp -f "$jar" "$SDCARD_DOWNLOAD/" 2>/dev/null || warn "无法复制到 SD 卡: $SDCARD_DOWNLOAD"
-    ok "已尝试复制到: $SDCARD_DOWNLOAD/$(basename "$jar")"
+    if ! cp -f "$jar" "$SDCARD_DOWNLOAD/" 2>/dev/null; then
+      warn "无法复制到 SD 卡: $SDCARD_DOWNLOAD"
+    else
+      ok "已尝试复制到: $SDCARD_DOWNLOAD/$(basename "$jar")"
+    fi
   fi
 }
 
@@ -675,16 +732,16 @@ public class AntiDebug {
 JAVA
   
   # 编译并注入
-  (cd "$tmpd" && javac AntiDebug.java 2>/dev/null) || { 
+  if ! (cd "$tmpd" && javac AntiDebug.java 2>/dev/null); then
     warn "javac 不可用，跳过注入"
     rm -rf "$tmpd"
     return 1
-  }
-  (cd "$tmpd" && jar uf "$target" AntiDebug.class) 2>/dev/null || { 
+  fi
+  if ! (cd "$tmpd" && jar uf "$target" AntiDebug.class) 2>/dev/null; then
     warn "jar 更新失败，跳过"
     rm -rf "$tmpd"
     return 1
-  }
+  fi
   
   # 清理临时文件
   rm -rf "$tmpd"
@@ -693,8 +750,7 @@ JAVA
 }
 
 obfuscate_advanced(){
-  local dir="$1"
-  local jar="$2"
+  local dir="$1"; local jar="$2"
   
   if [[ -z "$jar" || ! -f "$jar" ]]; then
     err "Jar 文件不存在: $jar"
@@ -702,7 +758,10 @@ obfuscate_advanced(){
   fi
   
   # 基础混淆
-  obfuscate_basic "$dir" "$jar" || { err "基础混淆失败"; return 1; }
+  if ! obfuscate_basic "$dir" "$jar"; then
+    err "基础混淆失败"
+    return 1
+  fi
   local obf="${jar%.jar}-obf.jar"
   local secure="${jar%.jar}-secure.jar"
   
@@ -721,7 +780,9 @@ obfuscate_advanced(){
   fi
   
   # 注入反调试
-  inject_antidebug_into_jar "$secure" || warn "注入 anti-debug 失败"
+  if ! inject_antidebug_into_jar "$secure"; then
+    warn "注入 anti-debug 失败"
+  fi
   
   # 发布产物
   ensure_dir "$dir/release"
@@ -732,7 +793,10 @@ obfuscate_advanced(){
 
 secure_pipeline(){
   local dir="$1"; local jar="$2"
-  obfuscate_advanced "$dir" "$jar" || { err "进阶混淆失败"; return 1; }
+  if ! obfuscate_advanced "$dir" "$jar"; then
+    err "进阶混淆失败"
+    return 1
+  fi
   ok "Secure pipeline 完成"
   return 0
 }
@@ -817,14 +881,20 @@ batch_zkm_deobf(){
 }
 
 # -------------------------
-# 核心构建菜单 (build_menu)
+# 核心构建菜单 (build_menu) - 修复语法错误
 # -------------------------
 build_menu(){
   local dir="$1"
-  [[ -z "$dir" || ! -d "$dir" ]] && { err "无效的项目目录: $dir"; return 1; }
+  if [[ -z "$dir" || ! -d "$dir" ]]; then
+    err "无效的项目目录: $dir"
+    return 1
+  fi
   
   local original_pwd="$PWD"
-  cd "$dir" || { err "无法进入目录 $dir"; return 1; }
+  if ! cd "$dir"; then
+    err "无法进入目录 $dir"
+    return 1
+  fi
 
   # 检测项目信息
   local mod_type=$(detect_mod_type "$dir")
@@ -861,7 +931,11 @@ build_menu(){
       1) # 清理项目
         info "执行 ./gradlew clean ..."
         run_and_log "$build_log" ./gradlew clean --no-daemon
-        [[ $? -eq 0 ]] && ok "项目清理完成" || err "清理失败，日志: $build_log"
+        if [[ $? -eq 0 ]]; then
+          ok "项目清理完成"
+        else
+          err "清理失败，日志: $build_log"
+        fi
         ;;
 
       2) # 构建项目
@@ -883,11 +957,15 @@ build_menu(){
         if [[ $? -eq 0 ]]; then
           ok "构建成功！"
           local jar=$(find_final_jar "$dir" "$mod_type")
-          [[ -n "$jar" ]] && info "找到产物: $jar"
+          if [[ -n "$jar" ]]; then
+            info "找到产物: $jar"
+          fi
         else
           err "构建失败，日志: $build_log"
           read -p "是否立即诊断失败原因？(y/N): " diag
-          [[ "$diag" =~ ^[Yy]$ ]] && diagnose_build_failure "$build_log"
+          if [[ "$diag" =~ ^[Yy]$ ]]; then
+            diagnose_build_failure "$build_log"
+          fi
         fi
         ;;
 
@@ -901,19 +979,31 @@ build_menu(){
         fi
         ;;
 
-      4) # 发布产物
+      4) # 发布产物 - 核心修复：完整if/else避免语法错误
         local jar=$(find_final_jar "$dir" "$mod_type")
-        [[ -n "$jar" && -f "$jar" ]] && publish_release "$dir" "$jar" || err "未找到可发布的JAR文件"
+        if [[ -n "$jar" && -f "$jar" ]]; then
+          publish_release "$dir" "$jar"
+        else
+          err "未找到可发布的JAR文件"
+        fi
         ;;
 
-      5) # 基础混淆
+      5) # 基础混淆 - 核心修复：完整if/else避免语法错误
         local jar=$(find_final_jar "$dir" "$mod_type")
-        [[ -n "$jar" && -f "$jar" ]] && obfuscate_basic "$dir" "$jar" || err "未找到可混淆的JAR文件"
+        if [[ -n "$jar" && -f "$jar" ]]; then
+          obfuscate_basic "$dir" "$jar"
+        else
+          err "未找到可混淆的JAR文件"
+        fi
         ;;
 
-      6) # 进阶混淆
+      6) # 进阶混淆 - 核心修复：完整if/else避免语法错误
         local jar=$(find_final_jar "$dir" "$mod_type")
-        [[ -n "$jar" && -f "$jar" ]] && obfuscate_advanced "$dir" "$jar" || err "未找到可混淆的JAR文件"
+        if [[ -n "$jar" && -f "$jar" ]]; then
+          obfuscate_advanced "$dir" "$jar"
+        else
+          err "未找到可混淆的JAR文件"
+        fi
         ;;
 
       7) # ZKM反混淆（单文件）
@@ -922,7 +1012,11 @@ build_menu(){
           zkm_deobf_single "$jar"
         else
           read -p "未自动找到JAR，请输入JAR文件路径: " custom_jar
-          [[ -f "$custom_jar" ]] && zkm_deobf_single "$custom_jar" || err "文件不存在: $custom_jar"
+          if [[ -f "$custom_jar" ]]; then
+            zkm_deobf_single "$custom_jar"
+          else
+            err "文件不存在: $custom_jar"
+          fi
         fi
         ;;
 
@@ -954,7 +1048,11 @@ build_menu(){
           read -p "是否指定其他日志文件？(y/N): " log_path
           if [[ "$log_path" =~ ^[Yy]$ ]]; then
             read -p "输入日志路径: " custom_log
-            [[ -f "$custom_log" ]] && diagnose_build_failure "$custom_log" || err "日志文件不存在: $custom_log"
+            if [[ -f "$custom_log" ]]; then
+              diagnose_build_failure "$custom_log"
+            else
+              err "日志文件不存在: $custom_log"
+            fi
           fi
         fi
         ;;

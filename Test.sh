@@ -32,8 +32,6 @@ SDCARD_DOWNLOAD="/sdcard/Download"
 ARCH=$(uname -m)
 IS_TERMUX=false
 
-apt upgrade && apt update
-
 ensure_pkg_cmd() {
     local pkg_cmd=""
     # 精准判断Termux Proot-Debian：Termux主目录存在 + proot进程运行
@@ -117,7 +115,7 @@ ensure_basic_tools() {
 }
 
 check_installed_tools() {
-    local tools=("git" "wget" "curl" "unzip" "javac" "sed" "awk")
+    local tools=("git" "wget" "curl" "unzip" "sed" "awk")
     echo -e "\n===== 安装结果验证 ====="
     for tool in "${tools[@]}"; do
         if command -v "$tool" &>/dev/null; then

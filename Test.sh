@@ -103,41 +103,21 @@ check_storage_and_hint(){
 # -------------------------
 # Ensure basic CLI tools
 # -------------------------
-ensure_basic_tools() {
-    local need=(git wget curl unzip zip tar sed awk javac python3 make)
-    local miss=()
-    
-    # 检查命令是否存在
-    for cmd in "${need[@]}"; do
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-            miss+=("$cmd")
-        fi
-    done
-    
-    if [[ ${#miss[@]} -eq 0 ]]; then
-        echo "✓ 所有基础工具已安装"
-        return 0
-    fi
-    
-    echo "⚠ 缺失工具: ${miss[*]}"
-    
-    # 检查是否为Termux环境
-    if [[ -n "$TERMUX_VERSION" ]] || [[ -d "/data/data/com.termux" ]]; then
-        echo "📦 使用pkg安装..."
-        pkg update -y
-        for cmd in "${miss[@]}"; do
-            case "$cmd" in
-                javac) pkg install -y openjdk-17 ;;
-                python3) pkg install -y python ;;
-                *) pkg install -y "$cmd" ;;
-            esac
-        done
+ensure_basic_tools(){
+  local need=(git wget curl unzip zip tar sed awk javac)
+  local miss=()
+  for t in "${need[@]}"; do
+    if ! command -v "$t" >/dev/null 2>&1; then miss+=("$t"); fi
+  done
+  if [[ ${#miss[@]} -gt 0 ]]; then
+    warn "检测到缺失工具: ${miss[*]}"
+    if [[ -n "$PKG_INSTALL_CMD" ]]; then
+      info "尝试通过包管理器安装..."
+      $PKG_INSTALL_CMD "${miss[@]}" || warn "自动安装失败，请手动安装: ${miss[*]}"
     else
-        echo "📦 请手动安装: ${miss[*]}"
-        echo "  Ubuntu/Debian: sudo apt install ${miss[*]}"
-        echo "  CentOS/RHEL: sudo yum install ${miss[*]}"
-        echo "  macOS: brew install ${miss[*]}"
+      warn "无法自动安装，请手动安装: ${miss[*]}"
     fi
+  fi
 }
 
 # -------------------------
@@ -492,21 +472,21 @@ diagnose_build_failure(){
 # -------------------------
 # Obfuscation: ProGuard (basic)
 # -------------------------
-#obfuscate_basic(){
-  #local dir="$1"; local jar="$2"
- # ensure_proguard || { err "ProGuard 未就绪"; return 1; }
-  #local out="${jar%.jar}-obf.jar"
-  #info "ProGuard 混淆 -> $(basename "$out")"
-  #java -jar "$PROGUARD_JAR" -injars "$jar" -outjars "$out" -dontwarn -dontoptimize -dontshrink -keep public class * { public protected *; }
-  #if [[ $? -eq 0 ]]; then
-    #ok "ProGuard 混淆成功: $(basename "$out")"
-    #cp -f "$out" "$(dirname "$jar")/../release/"
-    #return 0
-  #else
-    #err "ProGuard 混淆失败"
-    #return 1
-#  fi
-#}
+obfuscate_basic(){
+  local dir="$1"; local jar="$2"
+  ensure_proguard || { err "ProGuard 未就绪"; return 1; }
+  local out="${jar%.jar}-obf.jar"
+  info "ProGuard 混淆 -> $(basename "$out")"
+  java -jar "$PROGUARD_JAR" -injars "$jar" -outjars "$out" -dontwarn -dontoptimize -dontshrink -keep public class * { public protected *; }
+  if [[ $? -eq 0 ]]; then
+    ok "ProGuard 混淆成功: $(basename "$out")"
+    cp -f "$out" "$(dirname "$jar")/../release/"
+    return 0
+  else
+    err "ProGuard 混淆失败"
+    return 1
+  fi
+}
 
 # -------------------------
 # Advanced obfuscation: string tool + anti-debug injection
@@ -622,24 +602,13 @@ download_fabric_mdk(){
 download_forge_mdk(){
   read -p "输入 Minecraft 版本 (例: 1.20.1): " mcver
   [[ -z "$mcver" ]] && { warn "取消"; return 1; }
-  
   info "尝试获取 Forge 最新 promotion 对应 $mcver (可能需要手动确认)"
   JSON=$(curl -s https://files.minecraftforge.net/maven/net/minecraftforge/forge/promotions_slim.json 2>/dev/null)
-  
   ver=""
-  if [[ -n "$JSON" ]]; then
-    ver=$(echo "$JSON" | grep -o "\"$mcver-[^\"]*\"" | head -n1 | tr -d '"')
-  fi
-  
-  if [[ -z "$ver" ]]; then
-    read -p "输入 Forge 完整版本 (如 1.20.1-47.1.0) 或回车取消: " fullv
-    [[ -z "$fullv" ]] && { warn "取消"; return 1; }
-    ver="$fullv"
-  fi
-  
+  if [[ -n "$JSON" ]]; then ver=$(echo "$JSON" | grep -o "\"$mcver-[^\"]*\"" | head -n1 | tr -d '"'; fi
+  if [[ -z "$ver" ]]; then read -p "输入 Forge 完整版本 (如 1.20.1-47.1.0) 或回车取消: " fullv; [[ -z "$fullv" ]] && { warn "取消"; return 1; }; ver="$fullv"; fi
   url="https://maven.minecraftforge.net/net/minecraftforge/forge/${ver}/forge-${ver}-mdk.zip"
   tmp="/tmp/forge-${ver}.zip"
-  
   wget -q -O "$tmp" "$url" || { err "下载失败: $url"; return 1; }
   dest="$PROJECTS_LOCAL/forge-$ver"
   ensure_dir "$dest"

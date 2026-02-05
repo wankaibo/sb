@@ -111,9 +111,9 @@ ensure_basic_tools(){
   done
   if [[ ${#miss[@]} -gt 0 ]]; then
     warn "检测到缺失工具: ${miss[*]}"
-    if [[ -n "$APT_INSTALL_CMD" ]]; then
+    if [[ -n "$PKG_INSTALL_CMD" ]]; then
       info "尝试通过包管理器安装..."
-      $APT_INSTALL_CMD "${miss[@]}" || warn "自动安装失败，请手动安装: ${miss[*]}"
+      $PKG_INSTALL_CMD "${miss[@]}" || warn "自动安装失败，请手动安装: ${miss[*]}"
     else
       warn "无法自动安装，请手动安装: ${miss[*]}"
     fi
@@ -470,8 +470,31 @@ diagnose_build_failure(){
 }
 
 # -------------------------
-# Obfuscation: ProGuard (basic)
+# Obfuscation: ProGuard (basic) - 修复版本
 # -------------------------
+obfuscate_basic(){
+  local dir="$1"
+  local jar="$2"
+  ensure_proguard || { err "ProGuard 未就绪"; return 1; }
+  local out="${jar%.jar}-obf.jar"
+  info "ProGuard 混淆 -> $(basename "$out")"
+  
+  # 使用引号包裹 -keep 参数，避免花括号被 shell 解释
+  if java -jar "$PROGUARD_JAR" \
+       -injars "$jar" \
+       -outjars "$out" \
+       -dontwarn \
+       -dontoptimize \
+       -dontshrink \
+       '-keep public class * { public protected *; }'; then
+    ok "ProGuard 混淆成功: $(basename "$out")"
+    cp -f "$out" "$(dirname "$jar")/../release/"
+    return 0
+  else
+    err "ProGuard 混淆失败"
+    return 1
+  fi
+}
 
 # -------------------------
 # Advanced obfuscation: string tool + anti-debug injection

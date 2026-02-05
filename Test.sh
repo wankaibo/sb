@@ -30,11 +30,22 @@ CONFIG_FILE="$HOME/.mcdev_env.conf"
 GRADLE_USER_HOME="$HOME/.gradle"
 SDCARD_DOWNLOAD="/sdcard/Download"
 ARCH=$(uname -m)
-
 IS_TERMUX=false
 
 # Determine environment & package manager
-PKG_INSTALL_CMD="apt install -y"
+if command -v apt &>/dev/null; then
+    # Debian/Ubuntu 系列
+    PKG_INSTALL_CMD="apt update && apt install -y"
+elif command -v dnf &>/dev/null; then
+    # CentOS 8+/RHEL 8+/Fedora 系列
+    PKG_INSTALL_CMD="sudo dnf install -y"
+elif command -v yum &>/dev/null; then
+    # CentOS 7-/RHEL 7- 系列
+    PKG_INSTALL_CMD="sudo yum install -y"
+else
+    echo "错误：不支持当前系统的包管理器！"
+    exit 1
+fi
 
 # -------------------------
 # Utility
@@ -83,8 +94,28 @@ check_storage_and_hint(){
 # -------------------------
 # Ensure basic CLI tools
 # -------------------------
-ensure_basic_tools(){$PKG_INSTALL_CMD git wget curl unzip zip tar sed awk javac}
+ensure_basic_tools() {
 
+    if [ -z "$PKG_INSTALL_CMD" ]; then
+        echo "错误：未定义包安装命令PKG_INSTALL_CMD！"
+        return 1
+    fi
+
+    $PKG_INSTALL_CMD git wget curl unzip zip tar sed awk
+}
+
+ensure_basic_tools
+
+check_tools() {
+    local tools=("git" "wget" "curl" "javac")
+    for tool in "${tools[@]}"; do
+        if command -v $tool &>/dev/null; then
+            echo "✅ $tool 安装成功"
+        else
+            echo "❌ $tool 安装失败"
+        fi
+    done
+}
 # -------------------------
 # JDK: auto download and custom install
 # -------------------------

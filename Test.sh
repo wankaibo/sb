@@ -497,7 +497,7 @@ obfuscate_basic(){
 }
 
 # -------------------------
-# Advanced obfuscation: string tool + anti-debug injection
+# Advanced obfuscation: string tool + anti-debug injection - 修复版本
 # -------------------------
 inject_antidebug_into_jar(){
   local target="$1"
@@ -523,18 +523,26 @@ JAVA
 }
 
 obfuscate_advanced(){
-  local dir="$1"; local jar="$2"
+  local dir="$1"
+  local jar="$2"
   obfuscate_basic "$dir" "$jar" || { err "基础混淆失败"; return 1; }
   local obf="${jar%.jar}-obf.jar"
   local secure="${jar%.jar}-secure.jar"
+  
   if [[ -f "$STRINGER_JAR" ]]; then
     info "使用 stringer.jar 进行字符串加密..."
-    java -jar "$STRINGER_JAR" --input "$obf" --output "$secure" --mode xor 2>&1 | sed 's/^/    /'
-    [[ $? -ne 0 ]] && warn "stringer 失败，使用 obf"
+    # 捕获 stringer 命令的输出状态
+    if java -jar "$STRINGER_JAR" --input "$obf" --output "$secure" --mode xor 2>&1 | sed 's/^/    /'; then
+      : # 命令成功，继续执行
+    else
+      warn "stringer 失败，使用原始混淆文件"
+      cp -f "$obf" "$secure"
+    fi
   else
     warn "未检测到 stringer.jar (放在 ~/stringer.jar 可被自动使用)"
     cp -f "$obf" "$secure"
   fi
+  
   inject_antidebug_into_jar "$secure" || warn "注入 anti-debug 失败"
   cp -f "$secure" "$(dirname "$jar")/../release/"
   ok "进阶混淆完成 -> $(basename "$secure")"
@@ -561,8 +569,11 @@ zkm_deobf_single(){
   case "$t" in 1) trans="s11" ;; 2) trans="si11" ;; 3) trans="rvm11" ;; 4) trans="cf11" ;; 5) trans="s11,si11,rvm11,cf11" ;; *) trans="s11,si11,rvm11,cf11" ;; esac
   out="$BASE/release/deobf/$(basename "$input" .jar)-deobf.jar"
   info "运行 ZKM ($trans) -> $out"
-  java -jar "$ZKM_JAR" --input "$input" --output "$out" --transformer "$trans" --verbose
-  if [[ $? -eq 0 ]]; then ok "ZKM 完成 -> $out"; else err "ZKM 执行失败"; fi
+  if java -jar "$ZKM_JAR" --input "$input" --output "$out" --transformer "$trans" --verbose; then
+    ok "ZKM 完成 -> $out"
+  else
+    err "ZKM 执行失败"
+  fi
 }
 
 batch_zkm_deobf(){
@@ -572,8 +583,11 @@ batch_zkm_deobf(){
     [[ -f "$jar" ]] || continue
     out="$BASE/release/deobf/$(basename "$jar" .jar)-deobf.jar"
     info "ZKM 处理 $(basename "$jar") ..."
-    java -jar "$ZKM_JAR" --input "$jar" --output "$out" --transformer "s11,si11,rvm11,cf11" --verbose
-    ok "ZKM done: $out"
+    if java -jar "$ZKM_JAR" --input "$jar" --output "$out" --transformer "s11,si11,rvm11,cf11" --verbose; then
+      ok "ZKM done: $out"
+    else
+      warn "ZKM 处理失败: $jar"
+    fi
   done
 }
 
@@ -586,8 +600,11 @@ cfr_decompile_single(){
   [[ ! -f "$jar" ]] && { err "Jar not found: $jar"; return 1; }
   outdir="$BASE/decompile/$(basename "$jar" .jar)"
   ensure_dir "$outdir"
-  java -jar "$CFR_JAR" "$jar" --outputdir "$outdir"
-  ok "反编译完成 -> $outdir"
+  if java -jar "$CFR_JAR" "$jar" --outputdir "$outdir"; then
+    ok "反编译完成 -> $outdir"
+  else
+    err "反编译失败"
+  fi
 }
 
 # -------------------------
@@ -617,12 +634,16 @@ download_forge_mdk(){
   if [[ -z "$ver" ]]; then read -p "输入 Forge 完整版本 (如 1.20.1-47.1.0) 或回车取消: " fullv; [[ -z "$fullv" ]] && { warn "取消"; return 1; }; ver="$fullv"; fi
   url="https://maven.minecraftforge.net/net/minecraftforge/forge/${ver}/forge-${ver}-mdk.zip"
   tmp="/tmp/forge-${ver}.zip"
-  wget -q -O "$tmp" "$url" || { err "下载失败: $url"; return 1; }
-  dest="$PROJECTS_LOCAL/forge-$ver"
-  ensure_dir "$dest"
-  unzip -q "$tmp" -d "$dest"
-  rm -f "$tmp"
-  ok "Forge MDK 已解压到 $dest"
+  if wget -q -O "$tmp" "$url"; then
+    dest="$PROJECTS_LOCAL/forge-$ver"
+    ensure_dir "$dest"
+    unzip -q "$tmp" -d "$dest"
+    rm -f "$tmp"
+    ok "Forge MDK 已解压到 $dest"
+  else
+    err "下载失败: $url"
+    return 1
+  fi
 }
 
 # -------------------------
@@ -705,7 +726,12 @@ full_pipeline_project(){
   [[ -z "$finaljar" ]] && { err "找不到 final jar"; return 1; }
   obfuscate_advanced "$dir" "$finaljar" || warn "进阶混淆失败"
   obfjar="${finaljar%.jar}-secure.jar"; [[ ! -f "$obfjar" ]] && obfjar="${finaljar%.jar}-obf.jar"
-  if [[ -f "$obfjar" ]]; then publish_release "$dir" "$obfjar"; ensure_zkm && zkm_deobf_single "$obfjar" || warn "ZKM 步骤失败"; deobfpath="$BASE/release/deobf/$(basename "$obfjar" .jar)-deobf.jar"; [[ -f "$deobfpath" ]] && ensure_cfr && cfr_decompile_single "$deobfpath"; fi
+  if [[ -f "$obfjar" ]]; then 
+    publish_release "$dir" "$obfjar"; 
+    ensure_zkm && zkm_deobf_single "$obfjar" || warn "ZKM 步骤失败"; 
+    deobfpath="$BASE/release/deobf/$(basename "$obfjar" .jar)-deobf.jar"; 
+    [[ -f "$deobfpath" ]] && ensure_cfr && cfr_decompile_single "$deobfpath"; 
+  fi
   ok "全流程完成: $dir"
 }
 

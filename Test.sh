@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-# mcdev_final.sh
-# Ultimate single-file Minecraft Mod pipeline (Termux-friendly)
-#  - Full integration: JDK (custom + auto download), Gradle wrapper, Gradle ZIP import,
-#    Maven, Gradle optimization, Git clone with proxy, Fabric/Forge/MCP detection,
-#    remap/reobf handling, release publishing, ProGuard, advanced obf, ZKM, CFR,
-#    Fabric/Forge MDK download, batch build, full pipeline.
-#
-# Usage:
-#   chmod +x mcdev_final.sh
-#   ./mcdev_final.sh
-#
-# IMPORTANT: Use third-party deobfuscation tools (ZKM) only for legal/ethical purposes.
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -44,10 +32,9 @@ SDCARD_DOWNLOAD="/sdcard/Download"
 ARCH=$(uname -m)
 
 IS_TERMUX=false
-PKG_INSTALL_CMD=""
 
 # Determine environment & package manager
-PKG_INSTALL_CMD="apt install "
+PKG_INSTALL_CMD="apt install"
 
 # -------------------------
 # Utility

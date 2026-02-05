@@ -474,14 +474,24 @@ diagnose_build_failure(){
 # -------------------------
 obfuscate_basic(){
   local dir="$1"; local jar="$2"
+  local out=""
+  
   ensure_proguard || { err "ProGuard 未就绪"; return 1; }
-  local out="${jar%.jar}-obf.jar"
+  
+  # 安全地设置out变量
+  out="${jar%.jar}-obf.jar"
+  if [[ -z "$out" ]]; then
+    err "无法确定输出文件名"
+    return 1
+  fi
+  
   info "ProGuard 混淆 -> $(basename "$out")"
   
-  # 更健壮地执行ProGuard
+  # 执行ProGuard
   if java -jar "$PROGUARD_JAR" -injars "$jar" -outjars "$out" -dontwarn -dontoptimize -dontshrink -keep public class * { public protected *; }; then
     ok "ProGuard 混淆成功: $(basename "$out")"
-    # 确保out文件存在再复制
+    
+    # 检查输出文件是否存在
     if [[ -f "$out" ]]; then
       cp -f "$out" "$(dirname "$jar")/../release/"
       return 0
@@ -491,12 +501,9 @@ obfuscate_basic(){
     fi
   else
     err "ProGuard 混淆失败"
-    # 清理可能产生的无效输出文件
-    [[ -f "$out" ]] && rm -f "$out"
     return 1
   fi
 }
-
 # -------------------------
 # Advanced obfuscation: string tool + anti-debug injection
 # -------------------------

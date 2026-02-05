@@ -36,8 +36,7 @@ apt upgrade && apt update
 
 ensure_pkg_cmd() {
     local pkg_cmd=""
-    # 判断是否为Termux Proot环境（特征：TERMUX环境变量存在 + proot进程存在）
-if [ -n "${TERMUX_VERSION:-}" ] && ps -ef | grep -q [p]root; then
+    if [ -d "/data/data/com.termux/files/home" ] && ps -ef | grep -q [p]root; then
         echo "🔍 检测到 Termux Proot-Debian 环境，启用免sudo模式"
         pkg_cmd="apt update && apt install -y"
     elif command -v apt &>/dev/null; then
@@ -45,7 +44,7 @@ if [ -n "${TERMUX_VERSION:-}" ] && ps -ef | grep -q [p]root; then
         echo "🔍 检测到原生Debian/Ubuntu环境，启用sudo模式"
         pkg_cmd="sudo apt update && sudo apt install -y"
     else
-        echo "❌ 错误：仅支持Debian/Ubuntu（含Termux Proot-Debian）"
+        echo "❌ 错误：仅支持Debian/Ubuntu系列（含Termux Proot-Debian）"
         exit 1
     fi
     echo "$pkg_cmd"

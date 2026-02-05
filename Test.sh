@@ -36,21 +36,20 @@ apt upgrade && apt update
 
 ensure_pkg_cmd() {
     local pkg_cmd=""
+    # 精准判断Termux Proot-Debian：Termux主目录存在 + proot进程运行
     if [ -d "/data/data/com.termux/files/home" ] && ps -ef | grep -q [p]root; then
-        echo "🔍 检测到 Termux Proot-Debian 环境，启用免sudo模式"
+        echo "检测到 Termux Proot-Debian 环境，启用免sudo模式"
         pkg_cmd="apt update && apt install -y"
     elif command -v apt &>/dev/null; then
         # 原生Debian/Ubuntu（物理机/虚拟机）
-        echo "🔍 检测到原生Debian/Ubuntu环境，启用sudo模式"
+        echo "检测到原生Debian/Ubuntu环境，启用sudo模式"
         pkg_cmd="sudo apt update && sudo apt install -y"
     else
-        echo "❌ 错误：仅支持Debian/Ubuntu系列（含Termux Proot-Debian）"
+        echo "错误：仅支持Debian/Ubuntu系列（含Termux Proot-Debian）"
         exit 1
     fi
     echo "$pkg_cmd"
 }
-
-# 获取适配后的包安装命令（解决Proot下变量解析问题）
 PKG_INSTALL_CMD=$(ensure_pkg_cmd)
 
 # -------------------------
@@ -102,18 +101,31 @@ check_storage_and_hint(){
 # -------------------------
 ensure_basic_tools() {
     if [ -z "$PKG_INSTALL_CMD" ]; then
-        echo "❌ 错误：未获取到有效的包安装命令"
+        echo "错误：未获取到有效的包安装命令"
         return 1
     fi
-    echo -e "\n🚀 开始安装基础工具"
-    bash -c "$PKG_INSTALL_CMD git wget curl unzip zip tar sed awk"
-    # 安装结果判断
+
+    echo -e "\n开始安装基础工具..."
+    bash -c "$PKG_INSTALL_CMD git wget curl unzip zip tar sed gawk"
+
     if [ $? -eq 0 ]; then
-        echo -e "\n✅ 基础工具安装命令执行完成"
+        echo -e "\n基础工具安装命令执行完成"
     else
-        echo -e "\n❌ 基础工具安装失败，请检查网络/包名是否正确"
+        echo -e "\n基础工具安装失败，请检查网络/包名是否正确"
         return 1
     fi
+}
+
+check_installed_tools() {
+    local tools=("git" "wget" "curl" "unzip" "javac" "sed" "awk")
+    echo -e "\n===== 安装结果验证 ====="
+    for tool in "${tools[@]}"; do
+        if command -v "$tool" &>/dev/null; then
+            echo "✅ $tool 已安装"
+        else
+            echo "❌ $tool 未安装"
+        fi
+    done
 }
 
 # -------------------------

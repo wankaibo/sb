@@ -35,13 +35,7 @@ IS_TERMUX=false
 # Determine environment & package manager
 if command -v apt &>/dev/null; then
     # Debian/Ubuntu 系列
-    PKG_INSTALL_CMD="apt update && apt install -y"
-elif command -v dnf &>/dev/null; then
-    # CentOS 8+/RHEL 8+/Fedora 系列
-    PKG_INSTALL_CMD="sudo dnf install -y"
-elif command -v yum &>/dev/null; then
-    # CentOS 7-/RHEL 7- 系列
-    PKG_INSTALL_CMD="sudo yum install -y"
+    PKG_INSTALL_CMD="apt install -y"
 else
     echo "错误：不支持当前系统的包管理器！"
     exit 1

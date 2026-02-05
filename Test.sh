@@ -34,7 +34,7 @@ ARCH=$(uname -m)
 IS_TERMUX=false
 
 # Determine environment & package manager
-PKG_INSTALL_CMD="apt install"
+PKG_INSTALL_CMD="apt install -y"
 
 # -------------------------
 # Utility
@@ -83,19 +83,7 @@ check_storage_and_hint(){
 # -------------------------
 # Ensure basic CLI tools
 # -------------------------
-ensure_basic_tools(){
-  local need=(git wget curl unzip zip tar sed awk javac)
-  local miss=()
-  
-  for t in "${need[@]}"; do
-    ! command -v "${t##*/}" >/dev/null 2>&1 && miss+=("$t")
-  done
-  
-  [[ ${#miss[@]} -gt 0 ]] && {
-    warn "安装缺失工具: ${miss[*]}"
-    $PKG_INSTALL_CMD "${miss[@]}" || warn "安装失败"
-  }
-}
+ensure_basic_tools(){$PKG_INSTALL_CMD git wget curl unzip zip tar sed awk javac}
 
 # -------------------------
 # JDK: auto download and custom install

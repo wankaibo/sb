@@ -45,7 +45,7 @@ ensure_pkg_cmd() {
         echo "🔍 检测到原生Debian/Ubuntu环境，启用sudo模式"
         pkg_cmd="sudo apt update && sudo apt install -y"
     else
-        echo "❌ 错误：仅支持Debian/Ubuntu系列（含Termux Proot-Debian）"
+        echo "❌ 错误：仅支持Debian/Ubuntu（含Termux Proot-Debian）"
         exit 1
     fi
     echo "$pkg_cmd"
@@ -106,11 +106,8 @@ ensure_basic_tools() {
         echo "❌ 错误：未获取到有效的包安装命令"
         return 1
     fi
-
-    echo -e "\n🚀 开始安装基础工具..."
-    
+    echo -e "\n🚀 开始安装基础工具"
     bash -c "$PKG_INSTALL_CMD git wget curl unzip zip tar sed awk"
-
     # 安装结果判断
     if [ $? -eq 0 ]; then
         echo -e "\n✅ 基础工具安装命令执行完成"

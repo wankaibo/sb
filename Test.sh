@@ -32,6 +32,7 @@ SDCARD_DOWNLOAD="/sdcard/Download"
 ARCH=$(uname -m)
 IS_TERMUX=false
 
+apt upgrade && apt update
 # Determine environment & package manager
 if command -v apt &>/dev/null; then
     # Debian/Ubuntu 系列
